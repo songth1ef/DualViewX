@@ -1,0 +1,612 @@
+<template>
+  <view class="playback-page">
+    <view class="playback-content">
+      <!-- 视频列表 -->
+      <view class="video-list" v-if="recordingFiles.length > 0">
+        <view class="list-header">
+          <text class="list-title">录制文件</text>
+          <text class="list-count">共 {{ recordingFiles.length }} 个文件</text>
+        </view>
+        
+        <scroll-view class="list-scroll" scroll-y>
+          <view 
+            class="video-item" 
+            v-for="(file, index) in recordingFiles" 
+            :key="file.path"
+            @click="selectVideo(file)"
+          >
+            <view class="video-thumbnail">
+              <text class="thumbnail-icon">🎬</text>
+              <view class="video-duration">
+                <text class="duration-text">{{ formatDuration(file.duration) }}</text>
+              </view>
+            </view>
+            
+            <view class="video-info">
+              <text class="video-name">{{ getFileName(file.path) }}</text>
+              <view class="video-details">
+                <text class="detail-item">{{ getCameraText(file.cameraType) }}</text>
+                <text class="detail-item">{{ getOrientationText(file.orientation) }}</text>
+                <text class="detail-item">{{ file.resolution.toUpperCase() }}</text>
+                <text class="detail-item">{{ file.frameRate }}fps</text>
+              </view>
+              <view class="video-meta">
+                <text class="meta-item">{{ formatFileSize(file.size) }}</text>
+                <text class="meta-item">{{ formatDate(file.createTime) }}</text>
+              </view>
+            </view>
+            
+            <view class="video-actions">
+              <view class="action-btn" @click.stop="playVideo(file)">
+                <text class="action-icon">▶️</text>
+              </view>
+              <view class="action-btn" @click.stop="shareVideo(file)">
+                <text class="action-icon">📤</text>
+              </view>
+              <view class="action-btn delete" @click.stop="deleteVideo(file)">
+                <text class="action-icon">🗑️</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty-state" v-else>
+        <view class="empty-icon">
+          <text class="icon">📹</text>
+        </view>
+        <text class="empty-title">暂无录制文件</text>
+        <text class="empty-desc">开始录制你的第一个视频吧</text>
+        <button class="start-recording-btn" @click="goToRecording">开始录制</button>
+      </view>
+    </view>
+
+    <!-- 视频播放器模态框 -->
+    <view class="player-modal" v-if="showPlayer" @click="closePlayer">
+      <view class="player-container" @click.stop>
+        <view class="player-header">
+          <text class="player-title">{{ currentVideo?.path ? getFileName(currentVideo.path) : '' }}</text>
+          <view class="close-btn" @click="closePlayer">
+            <text class="close-icon">✕</text>
+          </view>
+        </view>
+        
+        <view class="player-content">
+          <view class="video-player">
+            <text class="player-placeholder">视频播放器</text>
+            <text class="player-note">实际项目中这里会集成原生视频播放器</text>
+          </view>
+          
+          <view class="player-controls">
+            <view class="control-btn" @click="togglePlay">
+              <text class="control-icon">{{ isPlaying ? '⏸️' : '▶️' }}</text>
+            </view>
+            <view class="control-btn" @click="toggleMute">
+              <text class="control-icon">{{ isMuted ? '🔇' : '🔊' }}</text>
+            </view>
+            <view class="control-btn" @click="toggleFullscreen">
+              <text class="control-icon">⛶</text>
+            </view>
+          </view>
+          
+          <view class="player-info" v-if="currentVideo">
+            <view class="info-item">
+              <text class="info-label">分辨率:</text>
+              <text class="info-value">{{ currentVideo.resolution.toUpperCase() }}</text>
+            </view>
+            <view class="info-item">
+              <text class="info-label">帧率:</text>
+              <text class="info-value">{{ currentVideo.frameRate }}fps</text>
+            </view>
+            <view class="info-item">
+              <text class="info-label">时长:</text>
+              <text class="info-value">{{ formatDuration(currentVideo.duration) }}</text>
+            </view>
+            <view class="info-item">
+              <text class="info-label">大小:</text>
+              <text class="info-value">{{ formatFileSize(currentVideo.size) }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useAppStore } from '@/store'
+import type { RecordingFile, CameraType, RecordingOrientation } from '@/types'
+
+const appStore = useAppStore()
+
+// 响应式数据
+const showPlayer = ref(false)
+const currentVideo = ref<RecordingFile | null>(null)
+const isPlaying = ref(false)
+const isMuted = ref(false)
+
+// 计算属性
+const recordingFiles = computed(() => appStore.recordingFiles)
+
+// 方法
+const selectVideo = (file: RecordingFile) => {
+  currentVideo.value = file
+  showPlayer.value = true
+}
+
+const playVideo = (file: RecordingFile) => {
+  selectVideo(file)
+  isPlaying.value = true
+}
+
+const shareVideo = (file: RecordingFile) => {
+  uni.showActionSheet({
+    itemList: ['保存到相册', '分享到微信', '分享到QQ', '其他'],
+    success: (res) => {
+      const actions = ['save', 'wechat', 'qq', 'other']
+      const action = actions[res.tapIndex]
+      
+      switch (action) {
+        case 'save':
+          saveToAlbum(file)
+          break
+        case 'wechat':
+          shareToWechat(file)
+          break
+        case 'qq':
+          shareToQQ(file)
+          break
+        case 'other':
+          shareToOther(file)
+          break
+      }
+    }
+  })
+}
+
+const deleteVideo = (file: RecordingFile) => {
+  uni.showModal({
+    title: '删除视频',
+    content: '确定要删除这个视频文件吗？此操作不可撤销。',
+    success: (res) => {
+      if (res.confirm) {
+        appStore.removeRecordingFile(file.path)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success'
+        })
+      }
+    }
+  })
+}
+
+const closePlayer = () => {
+  showPlayer.value = false
+  currentVideo.value = null
+  isPlaying.value = false
+}
+
+const togglePlay = () => {
+  isPlaying.value = !isPlaying.value
+}
+
+const toggleMute = () => {
+  isMuted.value = !isMuted.value
+}
+
+const toggleFullscreen = () => {
+  uni.showToast({
+    title: '全屏功能开发中',
+    icon: 'none'
+  })
+}
+
+const goToRecording = () => {
+  uni.switchTab({
+    url: '/src/pages/recording/recording'
+  })
+}
+
+const getFileName = (path: string): string => {
+  return path.split('/').pop() || '未知文件'
+}
+
+const getCameraText = (cameraType: CameraType): string => {
+  return cameraType === 'front' ? '前置' : '后置'
+}
+
+const getOrientationText = (orientation: RecordingOrientation): string => {
+  return orientation === 'portrait' ? '竖屏' : '横屏'
+}
+
+const formatDuration = (duration: number): string => {
+  const totalSeconds = Math.floor(duration / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const formatFileSize = (size: number): string => {
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)}KB`
+  } else if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)}MB`
+  } else {
+    return `${(size / (1024 * 1024 * 1024)).toFixed(1)}GB`
+  }
+}
+
+const formatDate = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  
+  if (diff < 24 * 60 * 60 * 1000) {
+    // 今天
+    return date.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
+  } else if (diff < 7 * 24 * 60 * 60 * 1000) {
+    // 一周内
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+    return `${days}天前`
+  } else {
+    // 更早
+    return date.toLocaleDateString('zh-CN')
+  }
+}
+
+const saveToAlbum = (file: RecordingFile) => {
+  uni.showLoading({
+    title: '保存中...'
+  })
+  
+  setTimeout(() => {
+    uni.hideLoading()
+    uni.showToast({
+      title: '保存成功',
+      icon: 'success'
+    })
+  }, 2000)
+}
+
+const shareToWechat = (file: RecordingFile) => {
+  uni.showToast({
+    title: '分享到微信功能开发中',
+    icon: 'none'
+  })
+}
+
+const shareToQQ = (file: RecordingFile) => {
+  uni.showToast({
+    title: '分享到QQ功能开发中',
+    icon: 'none'
+  })
+}
+
+const shareToOther = (file: RecordingFile) => {
+  uni.showToast({
+    title: '其他分享功能开发中',
+    icon: 'none'
+  })
+}
+</script>
+
+<style scoped>
+.playback-page {
+  flex: 1;
+  background-color: #f5f5f5;
+}
+
+.playback-content {
+  flex: 1;
+  padding: 20rpx;
+}
+
+.video-list {
+  background: white;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx 40rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.list-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.list-count {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.list-scroll {
+  max-height: calc(100vh - 200rpx);
+}
+
+.video-item {
+  display: flex;
+  align-items: center;
+  padding: 30rpx 40rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  gap: 30rpx;
+}
+
+.video-item:last-child {
+  border-bottom: none;
+}
+
+.video-thumbnail {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  background: #f0f0f0;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnail-icon {
+  font-size: 40rpx;
+}
+
+.video-duration {
+  position: absolute;
+  bottom: 8rpx;
+  right: 8rpx;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 4rpx 8rpx;
+  border-radius: 6rpx;
+}
+
+.duration-text {
+  font-size: 20rpx;
+  color: white;
+  font-family: monospace;
+}
+
+.video-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.video-name {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-details {
+  display: flex;
+  gap: 20rpx;
+}
+
+.detail-item {
+  font-size: 22rpx;
+  color: #666;
+  background: #f0f0f0;
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
+}
+
+.video-meta {
+  display: flex;
+  gap: 20rpx;
+}
+
+.meta-item {
+  font-size: 20rpx;
+  color: #999;
+}
+
+.video-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 15rpx;
+}
+
+.action-btn {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn.delete {
+  background: #ffebee;
+}
+
+.action-icon {
+  font-size: 24rpx;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 40rpx;
+  text-align: center;
+}
+
+.empty-icon {
+  margin-bottom: 40rpx;
+}
+
+.icon {
+  font-size: 120rpx;
+  opacity: 0.3;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+}
+
+.empty-desc {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 60rpx;
+}
+
+.start-recording-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 20rpx;
+  padding: 30rpx 60rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.start-recording-btn::after {
+  border: none;
+}
+
+.player-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.player-container {
+  width: 90%;
+  max-width: 800rpx;
+  background: white;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx 40rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.player-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close-btn {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-icon {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.player-content {
+  padding: 40rpx;
+}
+
+.video-player {
+  width: 100%;
+  height: 400rpx;
+  background: #000;
+  border-radius: 12rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+
+.player-placeholder {
+  font-size: 32rpx;
+  color: white;
+  margin-bottom: 20rpx;
+}
+
+.player-note {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.player-controls {
+  display: flex;
+  justify-content: center;
+  gap: 40rpx;
+  margin-bottom: 30rpx;
+}
+
+.control-btn {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.control-icon {
+  font-size: 32rpx;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 15rpx;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.info-value {
+  font-size: 24rpx;
+  color: #333;
+  font-family: monospace;
+}
+</style>

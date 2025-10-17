@@ -1,0 +1,663 @@
+<template>
+  <view class="recording-page">
+    <!-- 自定义导航栏 -->
+    <view class="custom-navbar">
+      <view class="navbar-left" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <view class="navbar-center">
+        <text class="navbar-title">录制</text>
+      </view>
+      <view class="navbar-right" @click="showSettings">
+        <text class="settings-icon">⚙️</text>
+      </view>
+    </view>
+
+    <!-- 摄像头预览区域 -->
+    <view class="preview-container">
+      <!-- 四路预览布局 -->
+      <view class="preview-grid" v-if="recordingMode === 'quad'">
+        <view class="preview-item front-portrait">
+          <view class="preview-label">前置竖屏</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📱</text>
+          </view>
+        </view>
+        <view class="preview-item front-landscape">
+          <view class="preview-label">前置横屏</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📱</text>
+          </view>
+        </view>
+        <view class="preview-item back-portrait">
+          <view class="preview-label">后置竖屏</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📷</text>
+          </view>
+        </view>
+        <view class="preview-item back-landscape">
+          <view class="preview-label">后置横屏</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📷</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 双路预览布局 -->
+      <view class="preview-dual" v-else-if="recordingMode === 'dual'">
+        <view class="preview-item dual-item">
+          <view class="preview-label">前置摄像头</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📱</text>
+          </view>
+        </view>
+        <view class="preview-item dual-item">
+          <view class="preview-label">后置摄像头</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">📷</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 单路预览布局 -->
+      <view class="preview-single" v-else>
+        <view class="preview-item single-item">
+          <view class="preview-label">{{ currentCamera === 'front' ? '前置摄像头' : '后置摄像头' }}</view>
+          <view class="preview-placeholder">
+            <text class="preview-icon">{{ currentCamera === 'front' ? '📱' : '📷' }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 录制控制区域 -->
+    <view class="control-container">
+      <!-- 录制状态显示 -->
+      <view class="recording-status">
+        <view class="status-indicator" :class="statusClass">
+          <text class="status-dot"></text>
+          <text class="status-text">{{ statusText }}</text>
+        </view>
+        <view class="recording-time" v-if="isRecording">
+          <text class="time-text">{{ formatTime(recordingTime) }}</text>
+        </view>
+      </view>
+
+      <!-- 控制按钮 -->
+      <view class="control-buttons">
+        <!-- 摄像头切换按钮 -->
+        <view class="control-btn switch-btn" @click="switchCamera" v-if="recordingMode === 'single'">
+          <text class="btn-icon">🔄</text>
+        </view>
+
+        <!-- 录制按钮 -->
+        <view class="control-btn record-btn" :class="{ recording: isRecording }" @click="toggleRecording">
+          <view class="record-inner" :class="{ recording: isRecording }">
+            <text class="record-icon" v-if="!isRecording">●</text>
+            <text class="record-icon" v-else>⏸</text>
+          </view>
+        </view>
+
+        <!-- 暂停/继续按钮 -->
+        <view class="control-btn pause-btn" @click="togglePause" v-if="isRecording">
+          <text class="btn-icon">{{ isPaused ? '▶️' : '⏸️' }}</text>
+        </view>
+      </view>
+
+      <!-- 参数调节面板 -->
+      <view class="parameter-panel" v-if="showParameters">
+        <view class="parameter-item">
+          <text class="parameter-label">曝光</text>
+          <slider 
+            class="parameter-slider"
+            :value="filterConfig.exposure"
+            min="-300"
+            max="300"
+            @change="onExposureChange"
+          />
+          <text class="parameter-value">{{ filterConfig.exposure }}</text>
+        </view>
+        <view class="parameter-item">
+          <text class="parameter-label">饱和度</text>
+          <slider 
+            class="parameter-slider"
+            :value="filterConfig.saturation"
+            min="0"
+            max="200"
+            @change="onSaturationChange"
+          />
+          <text class="parameter-value">{{ filterConfig.saturation }}%</text>
+        </view>
+        <view class="parameter-item">
+          <text class="parameter-label">对比度</text>
+          <slider 
+            class="parameter-slider"
+            :value="filterConfig.contrast"
+            min="0"
+            max="200"
+            @change="onContrastChange"
+          />
+          <text class="parameter-value">{{ filterConfig.contrast }}%</text>
+        </view>
+      </view>
+
+      <!-- 参数切换按钮 -->
+      <view class="parameter-toggle" @click="toggleParameters">
+        <text class="toggle-icon">{{ showParameters ? '▼' : '▲' }}</text>
+        <text class="toggle-text">参数调节</text>
+      </view>
+    </view>
+
+    <!-- 性能监控 -->
+    <view class="performance-monitor" v-if="showPerformance">
+      <view class="performance-item">
+        <text class="performance-label">CPU:</text>
+        <text class="performance-value">{{ performanceData.cpuUsage }}%</text>
+      </view>
+      <view class="performance-item">
+        <text class="performance-label">内存:</text>
+        <text class="performance-value">{{ performanceData.memoryUsage }}MB</text>
+      </view>
+      <view class="performance-item">
+        <text class="performance-label">帧率:</text>
+        <text class="performance-value">{{ performanceData.frameRate }}fps</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useAppStore } from '@/store'
+import type { CameraType, RecordingStatus } from '@/types'
+
+const appStore = useAppStore()
+
+// 响应式数据
+const currentCamera = ref<CameraType>('back')
+const isRecording = ref(false)
+const isPaused = ref(false)
+const recordingTime = ref(0)
+const showParameters = ref(false)
+const showPerformance = ref(false)
+
+// 计算属性
+const recordingMode = computed(() => appStore.recordingConfig.recordingMode)
+const filterConfig = computed(() => appStore.filterConfig)
+const performanceData = computed(() => appStore.performanceData)
+
+const statusClass = computed(() => {
+  if (isRecording.value && !isPaused.value) return 'status-recording'
+  if (isPaused.value) return 'status-paused'
+  return 'status-idle'
+})
+
+const statusText = computed(() => {
+  if (isRecording.value && !isPaused.value) return '录制中'
+  if (isPaused.value) return '已暂停'
+  return '准备就绪'
+})
+
+// 方法
+const goBack = () => {
+  uni.navigateBack()
+}
+
+const showSettings = () => {
+  uni.navigateTo({
+    url: '/src/pages/settings/settings'
+  })
+}
+
+const switchCamera = () => {
+  currentCamera.value = currentCamera.value === 'front' ? 'back' : 'front'
+}
+
+const toggleRecording = async () => {
+  if (!isRecording.value) {
+    // 开始录制
+    try {
+      await startRecording()
+    } catch (error) {
+      console.error('开始录制失败:', error)
+      uni.showToast({
+        title: '开始录制失败',
+        icon: 'error'
+      })
+    }
+  } else {
+    // 停止录制
+    try {
+      await stopRecording()
+    } catch (error) {
+      console.error('停止录制失败:', error)
+      uni.showToast({
+        title: '停止录制失败',
+        icon: 'error'
+      })
+    }
+  }
+}
+
+const togglePause = () => {
+  if (isPaused.value) {
+    resumeRecording()
+  } else {
+    pauseRecording()
+  }
+}
+
+const startRecording = async () => {
+  appStore.setRecordingStatus('preparing')
+  
+  // 模拟录制准备
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  
+  isRecording.value = true
+  isPaused.value = false
+  recordingTime.value = 0
+  appStore.setRecordingStatus('recording')
+  
+  // 开始计时
+  startTimer()
+  
+  uni.showToast({
+    title: '开始录制',
+    icon: 'success'
+  })
+}
+
+const stopRecording = async () => {
+  appStore.setRecordingStatus('stopping')
+  
+  isRecording.value = false
+  isPaused.value = false
+  stopTimer()
+  appStore.setRecordingStatus('idle')
+  
+  // 模拟保存文件
+  const mockFile = {
+    path: `/storage/recording_${Date.now()}.mp4`,
+    size: 1024 * 1024 * 50, // 50MB
+    duration: recordingTime.value,
+    cameraType: currentCamera.value,
+    orientation: 'portrait' as const,
+    resolution: appStore.recordingConfig.resolution,
+    frameRate: appStore.recordingConfig.frameRate,
+    createTime: Date.now()
+  }
+  
+  appStore.addRecordingFile(mockFile)
+  
+  uni.showToast({
+    title: '录制完成',
+    icon: 'success'
+  })
+}
+
+const pauseRecording = () => {
+  isPaused.value = true
+  appStore.setRecordingStatus('paused')
+  stopTimer()
+}
+
+const resumeRecording = () => {
+  isPaused.value = false
+  appStore.setRecordingStatus('recording')
+  startTimer()
+}
+
+const startTimer = () => {
+  timerInterval.value = setInterval(() => {
+    if (isRecording.value && !isPaused.value) {
+      recordingTime.value += 100
+      appStore.updatePerformanceData({
+        recordingTime: recordingTime.value
+      })
+    }
+  }, 100)
+}
+
+const stopTimer = () => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+}
+
+const formatTime = (ms: number): string => {
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+const toggleParameters = () => {
+  showParameters.value = !showParameters.value
+}
+
+const onExposureChange = (e: any) => {
+  appStore.setFilterConfig({ exposure: e.detail.value })
+}
+
+const onSaturationChange = (e: any) => {
+  appStore.setFilterConfig({ saturation: e.detail.value })
+}
+
+const onContrastChange = (e: any) => {
+  appStore.setFilterConfig({ contrast: e.detail.value })
+}
+
+// 定时器引用
+let timerInterval: any = null
+
+// 生命周期
+onMounted(() => {
+  // 模拟性能数据更新
+  setInterval(() => {
+    appStore.updatePerformanceData({
+      cpuUsage: Math.floor(Math.random() * 30) + 20,
+      memoryUsage: Math.floor(Math.random() * 200) + 300,
+      frameRate: Math.floor(Math.random() * 10) + 55
+    })
+  }, 1000)
+})
+
+onUnmounted(() => {
+  stopTimer()
+})
+</script>
+
+<style scoped>
+.recording-page {
+  flex: 1;
+  background-color: #000;
+  color: white;
+}
+
+.custom-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60rpx 40rpx 20rpx;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.navbar-left, .navbar-right {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.back-icon, .settings-icon {
+  font-size: 36rpx;
+}
+
+.navbar-center {
+  flex: 1;
+  text-align: center;
+}
+
+.navbar-title {
+  font-size: 36rpx;
+  font-weight: bold;
+}
+
+.preview-container {
+  flex: 1;
+  padding: 20rpx;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 20rpx;
+  height: 100%;
+}
+
+.preview-dual {
+  display: flex;
+  gap: 20rpx;
+  height: 100%;
+}
+
+.preview-single {
+  height: 100%;
+}
+
+.preview-item {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-label {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10rpx 20rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  z-index: 1;
+}
+
+.preview-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-icon {
+  font-size: 80rpx;
+  opacity: 0.5;
+}
+
+.control-container {
+  padding: 40rpx;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.recording-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40rpx;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 15rpx;
+}
+
+.status-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.status-indicator.status-recording .status-dot {
+  background: #ff4d4f;
+  animation: pulse 1s infinite;
+}
+
+.status-indicator.status-paused .status-dot {
+  background: #faad14;
+}
+
+.status-indicator.status-idle .status-dot {
+  background: #52c41a;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-text {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.time-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.control-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 60rpx;
+  margin-bottom: 40rpx;
+}
+
+.control-btn {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2rpx solid rgba(255, 255, 255, 0.3);
+}
+
+.switch-btn, .pause-btn {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-icon {
+  font-size: 40rpx;
+}
+
+.record-btn {
+  width: 140rpx;
+  height: 140rpx;
+  background: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+.record-btn.recording {
+  background: #faad14;
+  border-color: #faad14;
+}
+
+.record-inner {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.record-inner.recording {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 8rpx;
+}
+
+.record-icon {
+  font-size: 40rpx;
+  color: #ff4d4f;
+}
+
+.record-inner.recording .record-icon {
+  color: #faad14;
+  font-size: 30rpx;
+}
+
+.parameter-panel {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+
+.parameter-item {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 30rpx;
+}
+
+.parameter-item:last-child {
+  margin-bottom: 0;
+}
+
+.parameter-label {
+  width: 120rpx;
+  font-size: 28rpx;
+}
+
+.parameter-slider {
+  flex: 1;
+}
+
+.parameter-value {
+  width: 100rpx;
+  text-align: right;
+  font-size: 24rpx;
+  font-family: monospace;
+}
+
+.parameter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 20rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20rpx;
+}
+
+.toggle-icon {
+  font-size: 24rpx;
+}
+
+.toggle-text {
+  font-size: 28rpx;
+}
+
+.performance-monitor {
+  position: fixed;
+  top: 200rpx;
+  right: 20rpx;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 20rpx;
+  border-radius: 10rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.performance-item {
+  display: flex;
+  gap: 10rpx;
+  font-size: 20rpx;
+}
+
+.performance-label {
+  color: #999;
+}
+
+.performance-value {
+  color: #52c41a;
+  font-family: monospace;
+}
+</style>

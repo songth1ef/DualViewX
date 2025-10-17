@@ -1,109 +1,61 @@
 {
-    "id": "hello-uniapp-x",
-    "name": "hello-uniapp-x",
-    "displayName": "hello-uniapp-x",
-    "version": "1.0.32",
-    "description": "演示 uni-app x 框架的组件、接口、模板",
-    "scripts": {
-        "check-commit": "node ./git-hooks/check-commit.cjs"
-    },
-    "repository": "https://gitcode.net/dcloud/hello-uni-app-x",
-    "keywords": [
-        "uni-app-x",
-        "uni-app2.0",
-        "示例工程"
-    ],
-    "author": "",
-    "license": "MIT",
-    "dependencies": {},
-    "engines": {
-        "HBuilderX": "^3.99",
-        "uni-app": "",
-        "uni-app-x": "^4.03"
-    },
-    "dcloudext": {
-        "sale": {
-            "regular": {
-                "price": "0.00"
-            },
-            "sourcecode": {
-                "price": "0.00"
-            }
-        },
-        "contact": {
-            "qq": ""
-        },
-        "declaration": {
-            "ads": "无",
-            "data": "不采集任何数据",
-            "permissions": "- android.permission.INTERNET  \n- android.permission.READ_EXTERNAL_STORAGE  \n- android.permission.WRITE_EXTERNAL_STORAGE  \n- android.permission.ACCESS_FINE_LOCATION  \n- android.permission.ACCESS_COARSE_LOCATION  \n- android.permission.ACCESS_NETWORK_STATE  \n- android.permission.READ_MEDIA_IMAGES  \n- android.permission.READ_MEDIA_VIDEO  \n- android.permission.READ_MEDIA_VISUAL_USER_SELECTED  \n- android.permission.CAMERA  \n- android.permission.READ_PHONE_STATE  \n- android.permission.REQUEST_INSTALL_PACKAGES"
-        },
-        "npmurl": "",
-        "type": "uniapp-template-project",
-        "darkmode": "√",
-        "i18n": "x",
-        "widescreen": "√"
-    },
-    "uni_modules": {
-        "dependencies": [],
-        "encrypt": [],
-        "platforms": {
-            "cloud": {
-                "tcb": "√",
-                "aliyun": "√",
-                "alipay": "x"
-            },
-            "client": {
-                "uni-app": {
-                    "vue": {
-                        "vue2": "-",
-                        "vue3": "-"
-                    },
-                    "web": {
-                        "safari": "-",
-                        "chrome": "-"
-                    },
-                    "app": {
-                        "vue": "-",
-                        "nvue": "-",
-                        "android": "-",
-                        "ios": "-",
-                        "harmony": "-"
-                    },
-                    "mp": {
-                        "weixin": "-",
-                        "alipay": "-",
-                        "toutiao": "-",
-                        "baidu": "-",
-                        "kuaishou": "-",
-                        "jd": "-",
-                        "harmony": "-",
-                        "qq": "-",
-                        "lark": "-"
-                    },
-                    "quickapp": {
-                        "huawei": "-",
-                        "union": "-"
-                    }
-                },
-                "uni-app-x": {
-                    "web": {
-                        "safari": "√",
-                        "chrome": "√"
-                    },
-                    "app": {
-                        "android": {
-                            "extVersion": "",
-                            "minVersion": "21"
-                        },
-                        "ios": "√",
-                        "harmony": "√"
-                    },
-                    "mp": {
-                        "weixin": "√"
-                    }
-                }
-            }
-        }
-    }
+  "name": "dualviewx",
+  "version": "0.1.0",
+  "description": "DualViewX - 横竖同拍视频录制应用",
+  "main": "main.js",
+  "scripts": {
+    "dev:app": "uni -p app",
+    "dev:app-android": "uni -p app-android",
+    "dev:app-ios": "uni -p app-ios",
+    "build:app": "uni build -p app",
+    "build:app-android": "uni build -p app-android",
+    "build:app-ios": "uni build -p app-ios",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-4010920240930001",
+    "@dcloudio/uni-app-plus": "3.0.0-4010920240930001",
+    "@dcloudio/uni-components": "3.0.0-4010920240930001",
+    "@dcloudio/uni-h5": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-alipay": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-baidu": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-kuaishou": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-lark": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-qq": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-toutiao": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-4010920240930001",
+    "@dcloudio/uni-mp-xhs": "3.0.0-4010920240930001",
+    "@dcloudio/uni-quickapp-webview": "3.0.0-4010920240930001",
+    "vue": "^3.4.21",
+    "vue-i18n": "^9.9.1",
+    "pinia": "^2.1.7"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.8",
+    "@dcloudio/uni-automator": "3.0.0-4010920240930001",
+    "@dcloudio/uni-cli-shared": "3.0.0-4010920240930001",
+    "@dcloudio/uni-stacktracey": "3.0.0-4010920240930001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-4010920240930001",
+    "@types/node": "^20.11.19",
+    "@vue/tsconfig": "^0.5.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.4",
+    "vue-tsc": "^1.8.27"
+  },
+  "uni-app": {
+    "scripts": {}
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "uni-app",
+    "video",
+    "recording",
+    "camera",
+    "dual-view",
+    "mobile"
+  ],
+  "author": "DualViewX Team",
+  "license": "MIT"
 }

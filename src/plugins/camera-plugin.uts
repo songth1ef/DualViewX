@@ -1,0 +1,327 @@
+/**
+ * 摄像头原生插件接口
+ * 用于调用原生摄像头功能
+ */
+
+// 摄像头配置接口
+export interface CameraConfig {
+  /** 摄像头ID */
+  cameraId: string
+  /** 分辨率宽度 */
+  width: number
+  /** 分辨率高度 */
+  height: number
+  /** 帧率 */
+  frameRate: number
+  /** 编码格式 */
+  codec: string
+  /** 是否启用自动对焦 */
+  autoFocus: boolean
+  /** 是否启用闪光灯 */
+  flashMode: boolean
+}
+
+// 录制配置接口
+export interface RecordingConfig {
+  /** 输出文件路径 */
+  outputPath: string
+  /** 视频比特率 */
+  videoBitRate: number
+  /** 音频比特率 */
+  audioBitRate: number
+  /** 音频采样率 */
+  audioSampleRate: number
+  /** 录制时长限制（毫秒） */
+  maxDuration: number
+}
+
+// 录制状态接口
+export interface RecordingStatus {
+  /** 是否正在录制 */
+  isRecording: boolean
+  /** 是否暂停 */
+  isPaused: boolean
+  /** 录制时长 */
+  duration: number
+  /** 文件大小 */
+  fileSize: number
+  /** 错误信息 */
+  error?: string
+}
+
+// 性能数据接口
+export interface PerformanceData {
+  /** CPU使用率 */
+  cpuUsage: number
+  /** 内存使用量（MB） */
+  memoryUsage: number
+  /** 帧率 */
+  frameRate: number
+  /** 丢帧数 */
+  droppedFrames: number
+}
+
+/**
+ * 摄像头管理器类
+ */
+export class CameraManager {
+  private static instance: CameraManager | null = null
+  private cameras: Map<string, CameraConfig> = new Map()
+  private recordingStatus: Map<string, RecordingStatus> = new Map()
+  
+  /**
+   * 获取单例实例
+   */
+  static getInstance(): CameraManager {
+    if (!CameraManager.instance) {
+      CameraManager.instance = new CameraManager()
+    }
+    return CameraManager.instance
+  }
+  
+  /**
+   * 初始化摄像头管理器
+   */
+  async initialize(): Promise<boolean> {
+    try {
+      // 调用原生方法初始化摄像头
+      const result = await this.callNativeMethod('initialize', {})
+      return result.success
+    } catch (error) {
+      console.error('摄像头管理器初始化失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 获取可用摄像头列表
+   */
+  async getAvailableCameras(): Promise<string[]> {
+    try {
+      const result = await this.callNativeMethod('getAvailableCameras', {})
+      return result.cameras || []
+    } catch (error) {
+      console.error('获取摄像头列表失败:', error)
+      return []
+    }
+  }
+  
+  /**
+   * 打开摄像头
+   */
+  async openCamera(cameraId: string, config: CameraConfig): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('openCamera', {
+        cameraId,
+        config
+      })
+      
+      if (result.success) {
+        this.cameras.set(cameraId, config)
+        this.recordingStatus.set(cameraId, {
+          isRecording: false,
+          isPaused: false,
+          duration: 0,
+          fileSize: 0
+        })
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('打开摄像头失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 关闭摄像头
+   */
+  async closeCamera(cameraId: string): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('closeCamera', { cameraId })
+      
+      if (result.success) {
+        this.cameras.delete(cameraId)
+        this.recordingStatus.delete(cameraId)
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('关闭摄像头失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 开始录制
+   */
+  async startRecording(cameraId: string, config: RecordingConfig): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('startRecording', {
+        cameraId,
+        config
+      })
+      
+      if (result.success) {
+        const status = this.recordingStatus.get(cameraId)
+        if (status) {
+          status.isRecording = true
+          status.isPaused = false
+        }
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('开始录制失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 停止录制
+   */
+  async stopRecording(cameraId: string): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('stopRecording', { cameraId })
+      
+      if (result.success) {
+        const status = this.recordingStatus.get(cameraId)
+        if (status) {
+          status.isRecording = false
+          status.isPaused = false
+        }
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('停止录制失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 暂停录制
+   */
+  async pauseRecording(cameraId: string): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('pauseRecording', { cameraId })
+      
+      if (result.success) {
+        const status = this.recordingStatus.get(cameraId)
+        if (status) {
+          status.isPaused = true
+        }
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('暂停录制失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 继续录制
+   */
+  async resumeRecording(cameraId: string): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('resumeRecording', { cameraId })
+      
+      if (result.success) {
+        const status = this.recordingStatus.get(cameraId)
+        if (status) {
+          status.isPaused = false
+        }
+      }
+      
+      return result.success
+    } catch (error) {
+      console.error('继续录制失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 获取录制状态
+   */
+  getRecordingStatus(cameraId: string): RecordingStatus | null {
+    return this.recordingStatus.get(cameraId) || null
+  }
+  
+  /**
+   * 获取性能数据
+   */
+  async getPerformanceData(): Promise<PerformanceData> {
+    try {
+      const result = await this.callNativeMethod('getPerformanceData', {})
+      return result.data || {
+        cpuUsage: 0,
+        memoryUsage: 0,
+        frameRate: 0,
+        droppedFrames: 0
+      }
+    } catch (error) {
+      console.error('获取性能数据失败:', error)
+      return {
+        cpuUsage: 0,
+        memoryUsage: 0,
+        frameRate: 0,
+        droppedFrames: 0
+      }
+    }
+  }
+  
+  /**
+   * 设置滤镜参数
+   */
+  async setFilterParams(cameraId: string, params: any): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('setFilterParams', {
+        cameraId,
+        params
+      })
+      return result.success
+    } catch (error) {
+      console.error('设置滤镜参数失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 切换摄像头
+   */
+  async switchCamera(fromCameraId: string, toCameraId: string): Promise<boolean> {
+    try {
+      const result = await this.callNativeMethod('switchCamera', {
+        fromCameraId,
+        toCameraId
+      })
+      return result.success
+    } catch (error) {
+      console.error('切换摄像头失败:', error)
+      return false
+    }
+  }
+  
+  /**
+   * 调用原生方法
+   */
+  private async callNativeMethod(method: string, params: any): Promise<any> {
+    // 这里应该调用实际的原生插件方法
+    // 在开发阶段返回模拟数据
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          data: {},
+          ...params
+        })
+      }, 100)
+    })
+  }
+}
+
+/**
+ * 导出摄像头管理器实例
+ */
+export const cameraManager = CameraManager.getInstance()

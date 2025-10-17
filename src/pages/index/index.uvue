@@ -1,0 +1,497 @@
+<template>
+  <view class="index-page">
+    <!-- 自定义导航栏 -->
+    <view class="custom-navbar">
+      <view class="navbar-content">
+        <text class="navbar-title">DualViewX</text>
+        <text class="navbar-subtitle">横竖同拍视频录制</text>
+      </view>
+    </view>
+
+    <!-- 主要内容区域 -->
+    <scroll-view class="main-content" scroll-y>
+      <!-- 功能卡片区域 -->
+      <view class="feature-cards">
+        <!-- 快速录制卡片 -->
+        <view class="feature-card primary" @click="goToRecording">
+          <view class="card-icon">
+            <text class="icon">📹</text>
+          </view>
+          <view class="card-content">
+            <text class="card-title">开始录制</text>
+            <text class="card-desc">横竖同拍，多视角记录</text>
+          </view>
+          <view class="card-arrow">
+            <text class="arrow">→</text>
+          </view>
+        </view>
+
+        <!-- 录制模式选择 -->
+        <view class="recording-modes">
+          <text class="section-title">录制模式</text>
+          <view class="mode-options">
+            <view 
+              class="mode-option" 
+              :class="{ active: selectedMode === 'single' }"
+              @click="selectMode('single')"
+            >
+              <text class="mode-icon">📱</text>
+              <text class="mode-name">单路</text>
+            </view>
+            <view 
+              class="mode-option" 
+              :class="{ active: selectedMode === 'dual' }"
+              @click="selectMode('dual')"
+            >
+              <text class="mode-icon">📱📱</text>
+              <text class="mode-name">双路</text>
+            </view>
+            <view 
+              class="mode-option" 
+              :class="{ active: selectedMode === 'quad' }"
+              @click="selectMode('quad')"
+            >
+              <text class="mode-icon">📱📱📱📱</text>
+              <text class="mode-name">四路</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 设备状态卡片 -->
+        <view class="status-card">
+          <view class="status-header">
+            <text class="status-title">设备状态</text>
+            <view class="status-indicator" :class="deviceStatusClass">
+              <text class="status-dot"></text>
+              <text class="status-text">{{ deviceStatusText }}</text>
+            </view>
+          </view>
+          <view class="status-info">
+            <view class="status-item">
+              <text class="status-label">摄像头权限:</text>
+              <text class="status-value" :class="cameraPermissionClass">
+                {{ cameraPermissionText }}
+              </text>
+            </view>
+            <view class="status-item">
+              <text class="status-label">麦克风权限:</text>
+              <text class="status-value" :class="microphonePermissionClass">
+                {{ microphonePermissionText }}
+              </text>
+            </view>
+            <view class="status-item">
+              <text class="status-label">设备性能:</text>
+              <text class="status-value">{{ devicePerformance }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 最近录制 -->
+        <view class="recent-recordings" v-if="recentFiles.length > 0">
+          <view class="section-header">
+            <text class="section-title">最近录制</text>
+            <text class="view-all" @click="goToPlayback">查看全部</text>
+          </view>
+          <scroll-view class="recordings-list" scroll-x>
+            <view class="recording-item" v-for="file in recentFiles" :key="file.path">
+              <view class="recording-thumbnail">
+                <text class="thumbnail-icon">🎬</text>
+              </view>
+              <view class="recording-info">
+                <text class="recording-name">{{ getFileName(file.path) }}</text>
+                <text class="recording-duration">{{ formatDuration(file.duration) }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useAppStore } from '@/store'
+import { CameraUtils } from '@/utils/camera'
+import type { RecordingMode } from '@/types'
+
+const appStore = useAppStore()
+
+// 响应式数据
+const selectedMode = ref<RecordingMode>('dual')
+const cameraPermission = ref<boolean>(false)
+const microphonePermission = ref<boolean>(false)
+const devicePerformance = ref<string>('检测中...')
+
+// 计算属性
+const deviceStatusClass = computed(() => {
+  if (cameraPermission.value && microphonePermission.value) {
+    return 'status-ready'
+  } else if (cameraPermission.value || microphonePermission.value) {
+    return 'status-partial'
+  } else {
+    return 'status-error'
+  }
+})
+
+const deviceStatusText = computed(() => {
+  if (cameraPermission.value && microphonePermission.value) {
+    return '就绪'
+  } else if (cameraPermission.value || microphonePermission.value) {
+    return '部分就绪'
+  } else {
+    return '需要权限'
+  }
+})
+
+const cameraPermissionClass = computed(() => 
+  cameraPermission.value ? 'status-granted' : 'status-denied'
+)
+
+const cameraPermissionText = computed(() => 
+  cameraPermission.value ? '已授权' : '未授权'
+)
+
+const microphonePermissionClass = computed(() => 
+  microphonePermission.value ? 'status-granted' : 'status-denied'
+)
+
+const microphonePermissionText = computed(() => 
+  microphonePermission.value ? '已授权' : '未授权'
+)
+
+const recentFiles = computed(() => appStore.recordingFiles.slice(0, 5))
+
+// 方法
+const selectMode = (mode: RecordingMode) => {
+  selectedMode.value = mode
+  appStore.setRecordingConfig({ recordingMode: mode })
+}
+
+const goToRecording = () => {
+  uni.navigateTo({
+    url: '/pages/recording/recording'
+  })
+}
+
+const goToPlayback = () => {
+  uni.switchTab({
+    url: '/pages/playback/playback'
+  })
+}
+
+const getFileName = (path: string): string => {
+  return path.split('/').pop() || '未知文件'
+}
+
+const formatDuration = (duration: number): string => {
+  const minutes = Math.floor(duration / 60000)
+  const seconds = Math.floor((duration % 60000) / 1000)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const checkPermissions = async () => {
+  try {
+    const [camera, microphone] = await Promise.all([
+      CameraUtils.requestCameraPermission(),
+      CameraUtils.requestMicrophonePermission()
+    ])
+    
+    cameraPermission.value = camera
+    microphonePermission.value = microphone
+  } catch (error) {
+    console.error('检查权限失败:', error)
+  }
+}
+
+const checkDevicePerformance = async () => {
+  try {
+    const performance = await CameraUtils.checkDevicePerformance()
+    const performanceText = {
+      low: '低端设备',
+      medium: '中端设备', 
+      high: '高端设备'
+    }
+    devicePerformance.value = performanceText[performance]
+  } catch (error) {
+    console.error('检查设备性能失败:', error)
+    devicePerformance.value = '检测失败'
+  }
+}
+
+// 生命周期
+onMounted(() => {
+  checkPermissions()
+  checkDevicePerformance()
+})
+</script>
+
+<style scoped>
+.index-page {
+  flex: 1;
+  background-color: #f5f5f5;
+}
+
+.custom-navbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 60rpx 40rpx 40rpx;
+  color: white;
+}
+
+.navbar-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.navbar-title {
+  font-size: 48rpx;
+  font-weight: bold;
+  margin-bottom: 10rpx;
+}
+
+.navbar-subtitle {
+  font-size: 28rpx;
+  opacity: 0.9;
+}
+
+.main-content {
+  flex: 1;
+  padding: 40rpx;
+}
+
+.feature-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+}
+
+.feature-card {
+  background: white;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.feature-card.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.card-icon {
+  margin-right: 30rpx;
+}
+
+.icon {
+  font-size: 60rpx;
+}
+
+.card-content {
+  flex: 1;
+}
+
+.card-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 10rpx;
+}
+
+.card-desc {
+  font-size: 28rpx;
+  opacity: 0.8;
+}
+
+.card-arrow {
+  font-size: 40rpx;
+  opacity: 0.7;
+}
+
+.recording-modes {
+  background: white;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 30rpx;
+  display: block;
+}
+
+.mode-options {
+  display: flex;
+  gap: 20rpx;
+}
+
+.mode-option {
+  flex: 1;
+  background: #f8f9fa;
+  border-radius: 16rpx;
+  padding: 30rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2rpx solid transparent;
+  transition: all 0.3s ease;
+}
+
+.mode-option.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.mode-icon {
+  font-size: 40rpx;
+  margin-bottom: 10rpx;
+}
+
+.mode-name {
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.status-card {
+  background: white;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.status-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.status-indicator.status-ready .status-dot {
+  background: #52c41a;
+}
+
+.status-indicator.status-partial .status-dot {
+  background: #faad14;
+}
+
+.status-indicator.status-error .status-dot {
+  background: #ff4d4f;
+}
+
+.status-text {
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.status-value {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.status-granted {
+  color: #52c41a;
+}
+
+.status-denied {
+  color: #ff4d4f;
+}
+
+.recent-recordings {
+  background: white;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.view-all {
+  font-size: 24rpx;
+  color: #667eea;
+}
+
+.recordings-list {
+  display: flex;
+  gap: 20rpx;
+}
+
+.recording-item {
+  min-width: 200rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15rpx;
+}
+
+.recording-thumbnail {
+  width: 120rpx;
+  height: 120rpx;
+  background: #f0f0f0;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnail-icon {
+  font-size: 40rpx;
+}
+
+.recording-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5rpx;
+}
+
+.recording-name {
+  font-size: 24rpx;
+  color: #333;
+  text-align: center;
+}
+
+.recording-duration {
+  font-size: 20rpx;
+  color: #999;
+}
+</style>
